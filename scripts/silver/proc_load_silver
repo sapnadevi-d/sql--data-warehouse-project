@@ -1,1 +1,544 @@
+/*=============================================================
+    PROCEDURE: silver.load_silver
 
+    PURPOSE:
+    --------
+    Loads and transforms data from the Bronze layer into the
+    Silver layer.
+     
+  =============================================================*/
+
+Create or Alter Procedure silver.load_silver  as 
+Begin 
+
+/*-------------------------------------------------------------
+    Variable Declaration
+    Used for ETL execution timing and performance monitoring
+-------------------------------------------------------------*/
+Declare @start_time Datetime, @end_time Datetime, @batch_start_time Datetime, @batch_end_time Datetime;
+
+Begin Try
+
+/*-------------------------------------------------------------
+    Start Batch Execution
+-------------------------------------------------------------*/
+set @batch_start_time = getdate();
+
+Print '=============================================';
+Print 'Loading silver Layer';
+Print '=============================================';
+
+
+/*=============================================================
+    SECTION 1: LOAD CUSTOMER INFORMATION
+    TARGET TABLE: silver.crm_cust_info
+
+    TRANSFORMATIONS:
+    - Remove duplicate customer records
+    - Keep latest customer record
+    - Trim leading/trailing spaces
+    - Standardize marital status values
+    - Standardize gender values
+=============================================================*/
+
+--loading silver.crm_cust_info
+Set @start_time= getdate();
+
+Print'>> Truncating Table: silver.crm_cust_info';
+
+Truncate Table silver.crm_cust_info
+
+Print'>> Inserting data into: silver.crm_cust_info';
+
+Insert into silver.crm_cust_info (
+cst_id,
+Cst_key, 
+cst_firstname,
+cst_lastname,
+cst_marital_status,
+cst_gndr,
+cst_create_date)
+
+Select
+cst_id,
+cst_key,
+
+-- Remove leading and trailing spaces
+Trim(cst_firstname) as cst_firstname,
+Trim(cst_lastname) as cst_lastname,
+
+-- Convert marital status codes into business-friendly values
+Case 
+    When Upper(Trim(cst_marital_status)) ='S' then 'Single'
+    When Upper(Trim(cst_marital_status)) ='M' then 'Married'
+    Else 'n/a'
+End  cst_marital_status,
+
+-- Convert gender codes into business-friendly values
+Case 
+    When Upper(Trim(cst_gndr)) ='F' then 'Female'
+    When Upper(Trim(cst_gndr)) ='M' then 'Male'
+    Else 'n/a'
+End  cst_gndr,
+cst_create_date
+
+From (
+        Select *,        
+-- Keep only the most recent record per customer
+     Row_number () Over (Partition by cst_id order by cst_create_date desc) as flag_last
+      From bronze.crm_cust_info
+      where cst_id is not null                -- Exclude invalid customer IDs
+  ) t where flag_last=1
+
+/*-------------------------------------------------------------
+    Customer Load Duration
+-------------------------------------------------------------*/
+Set @end_time =getdate();
+
+Print'>>Load Duration:'+Cast(Datediff(second,@start_time,@end_time) as Nvarchar)+'seconds';
+Print '>>---------------------------------';
+
+
+/*=============================================================
+    SECTION 2: LOAD PRODUCT INFORMATION
+    TARGET TABLE: silver.crm_prd_info
+
+    TRANSFORMATIONS:
+    - Extract category ID from product key
+    - Clean product key
+    - Replace NULL product costs with zero
+    - Standardize product line values
+    - Convert dates to DATE datatype
+    - Derive product end dates using LEAD()
+=============================================================*/
+
+--Inserting data into the silver.crm_prd_info from bronze.crm_prd_info --
+
+set @start_time = getdate()
+
+Print'>> Truncating Table: silver.crm_prd_info';
+
+Truncate Table silver.crm_prd_info
+
+Print'>> Inserting data into: silver.crm_prd_info';
+
+Insert into silver.crm_prd_info(
+prd_id,
+cat_id,
+prd_key,
+prd_nm,
+prd_cost,
+prd_line,
+prd_start_dt,
+prd_end_dt)
+
+Select 
+prd_id, 
+
+-- Extract category identifier from product key to connect with other tables later-
+Replace(substring(prd_key,1,5),'-','_') as cat_id,
+-- Extract actual product key to connect with other tables
+substring(prd_key,7,len(prd_key)) as prd_key,
+prd_nm,
+-- Replace NULL product costs with 0
+isnull (prd_cost,0) as prd_cost,
+-- Standardize product line descriptions
+case upper(trim(prd_line)) 
+    when  'M' then 'Mountain'
+    when 'R' then 'Road'
+    when 'S' then 'Other Sales'
+    when 'T' then 'Touring'
+    Else 'n/a'
+End as prd_line,
+
+-- Convert start date to DATE datatype
+cast (prd_start_dt as date) as prd_start_dt,
+
+-- Calculate end date as one day before next version starts( because the product end date< start date --
+cast(lead(prd_start_dt) over (partition by prd_key order by prd_start_dt) - 1 as date) as prd_end_dt
+From bronze.crm_prd_info
+
+/*-------------------------------------------------------------
+    Product Load Duration
+-------------------------------------------------------------*/
+Set @end_time= getdate();
+
+Print'>>Load Duration:'+Cast(Datediff(second,@start_time,@end_time) as Nvarchar)+'seconds';
+Print '>>---------------------------------';
+
+
+
+/*=============================================================
+    SECTION 3: LOAD SALES DETAILS
+    TARGET TABLE: silver.crm_sales_details
+
+    PURPOSE:
+    --------
+    Load sales transaction data from the Bronze layer into
+    the Silver layer after applying data quality checks and
+    business transformations.
+
+    TRANSFORMATIONS:
+    ----------------
+    - Validate and convert order dates
+    - Validate and convert ship dates
+    - Validate and convert due dates
+    - Recalculate invalid sales amounts
+    - Handle missing or invalid prices
+    - Prevent divide-by-zero errors
+=============================================================*/
+
+--Data inserted into the silver.crm_sales_details from bronze layer after transformation--
+
+Set @start_time = getdate();
+
+/*-------------------------------------------------------------
+    Remove Existing Data
+-------------------------------------------------------------*/
+Print'>> Truncating Table: silver.crm_sales_details ';
+
+Truncate Table silver.crm_sales_details 
+
+/*-------------------------------------------------------------
+    Load Transformed Sales Data
+-------------------------------------------------------------*/
+Print'>> Inserting data into: silver.crm_sales_details ';
+
+Insert into silver.crm_sales_details ( 
+sls_ord_num,
+sls_prd_key,
+sls_cust_id,
+sls_order_dt,
+sls_ship_dt,
+sls_due_dt,
+sls_sales,
+sls_quantity,
+sls_price
+)
+
+Select 
+sls_ord_num,
+sls_prd_key,
+sls_cust_id,
+
+/*-------------------------------------------------------------
+    Validate Order Date
+    Rules:
+    - Reject zero values
+    - Reject invalid date lengths
+    - Convert valid values to DATE
+-------------------------------------------------------------*/
+Case 
+    when sls_order_dt =0 or Len(sls_order_dt)!=8 then Null
+    Else Cast(Cast(sls_order_dt as varchar) as date)
+End as sls_order_dt,
+
+/*-------------------------------------------------------------
+    Validate Ship Date
+    Rules:
+    - Reject zero values
+    - Reject invalid date lengths
+    - Convert valid values to DATE
+-------------------------------------------------------------*/
+Case 
+    when sls_ship_dt =0 or Len(sls_ship_dt)!=8 then Null
+    Else Cast(Cast(sls_ship_dt as varchar) as date)
+End as sls_ship_dt,
+
+/*-------------------------------------------------------------
+    Validate Due Date
+    Rules:
+    - Reject zero values
+    - Reject invalid date lengths
+    - Convert valid values to DATE
+-------------------------------------------------------------*/
+Case 
+    when sls_due_dt =0 or Len(sls_due_dt)!=8 then Null
+    Else Cast(Cast(sls_due_dt as varchar) as date)
+End as sls_due_dt,
+
+/*-------------------------------------------------------------
+    Validate Sales Amount
+    Rules:
+    - Replace NULL sales values
+    - Replace negative or zero sales values
+    - Recalculate sales when amount does not match
+      Quantity × Price
+-------------------------------------------------------------*/
+Case 
+    When sls_sales is null or sls_sales<=0 or sls_sales !=sls_quantity*ABS(sls_price)
+    Then sls_quantity*ABS(sls_price)
+    Else sls_sales
+End as sls_sales,
+
+sls_quantity,
+
+/*-------------------------------------------------------------
+    Validate Product Price
+    Rules:
+    - Replace NULL prices
+    - Replace negative or zero prices
+    - Derive price from Sales ÷ Quantity
+    - Prevent divide-by-zero errors
+-------------------------------------------------------------*/
+Case 
+    When sls_price is null or sls_price <=0
+    Then sls_sales/Nullif(sls_quantity,0)
+    Else sls_price
+End as sls_price
+
+From bronze.crm_sales_details
+
+/*-------------------------------------------------------------
+    Sales Details Load Duration
+-------------------------------------------------------------*/
+Set @end_time =getdate();
+
+Print'>>Load Duration:'+Cast(Datediff(second,@start_time,@end_time) as Nvarchar)+'seconds';
+
+Print '>>---------------------------------';
+
+
+
+/*=============================================================
+    SECTION 4: LOAD ERP CUSTOMER DATA
+    TARGET TABLE: silver.erp_cust_az12
+
+    PURPOSE:
+    --------
+    Load customer master data from the ERP source into the
+    Silver layer after applying data cleansing and
+    standardization rules.
+
+    TRANSFORMATIONS:
+    ----------------
+    - Remove 'NAS' prefix from customer IDs to match with the connecting key of other table
+    - Validate birth dates
+    - Standardize gender values
+=============================================================*/
+
+-- data inserted into the silver layer for erp_cust_column--
+
+Set @start_time = getdate();
+
+/*-------------------------------------------------------------
+    Remove Existing Data
+-------------------------------------------------------------*/
+Print'>> Truncating Table: silver.erp_cust_az12 ';
+
+Truncate Table silver.erp_cust_az12 
+
+/*-------------------------------------------------------------
+    Load Transformed ERP Customer Data
+-------------------------------------------------------------*/
+Print'>> Inserting data into: silver.erp_cust_az12 ';
+
+Insert into silver.erp_cust_az12(
+cid,
+bdate,
+gen)
+
+Select 
+
+/*-------------------------------------------------------------
+    Customer ID Standardization
+    Remove 'NAS' prefix when present
+-------------------------------------------------------------*/
+Case 
+    when cid Like 'NAS%' Then substring(cid,4, len(cid))
+    Else cid
+End cid,
+
+/*-------------------------------------------------------------
+    Birth Date Validation
+    Future dates are considered invalid and replaced with NULL
+-------------------------------------------------------------*/
+Case 
+    when bdate > getdate() then null
+    Else bdate
+End as bdate,
+
+/*-------------------------------------------------------------
+    Gender Standardization
+    Convert multiple gender formats into standard values
+-------------------------------------------------------------*/
+Case 
+    When upper(trim(gen)) in ('F', 'FEMALE') then 'Female'
+    When upper(trim(gen)) in('M', 'MALE') then 'Male'
+    Else 'n/a'
+End as gen
+
+From bronze.erp_cust_az12
+
+/*-------------------------------------------------------------
+    ERP Customer Load Duration
+-------------------------------------------------------------*/
+Set @end_time =getdate();
+
+Print'>>Load Duration:'+Cast(Datediff(second,@start_time,@end_time) as Nvarchar)+'seconds';
+
+Print '>>---------------------------------';
+
+
+/*=============================================================
+    SECTION 5: LOAD ERP LOCATION DATA
+    TARGET TABLE: silver.erp_loc_ac101
+
+    PURPOSE:
+    --------
+    Load customer location information from ERP source
+    and standardize country values.
+
+    TRANSFORMATIONS:
+    ----------------
+    - Remove dashes from Customer IDs to match with the connecting key of other columns 
+    - Convert country codes into country names
+    - Handle missing country values
+=============================================================*/
+
+-- inserting data into the table silver.erp_loc_ac101 from the bronze layer--
+
+Set @start_time =getdate();
+
+/*-------------------------------------------------------------
+    Remove Existing Data
+-------------------------------------------------------------*/
+Print'>> Truncating Table: silver.erp_loc_ac101 ';
+
+Truncate Table silver.erp_loc_ac101 
+
+/*-------------------------------------------------------------
+    Load Transformed ERP Location Data
+-------------------------------------------------------------*/
+Print'>> Inserting data into: silver.erp_loc_ac101 ';
+
+Insert into silver.erp_loc_ac101 (
+cid,
+cntry
+)
+
+Select
+
+/*-------------------------------------------------------------
+    Customer ID Cleanup
+    Remove hyphens from customer IDs
+-------------------------------------------------------------*/
+Replace (cid,'-','') cid,
+
+/*-------------------------------------------------------------
+    Country Standardization
+    Convert country codes to descriptive country names
+-------------------------------------------------------------*/
+Case 
+    when Trim(cntry)='DE' Then 'Germany'
+    When trim(cntry) in ('US','USA') Then 'United States'
+    When trim(cntry)= '' or cntry is null then 'n/a'
+    Else Trim(cntry)
+End as cntry
+
+From bronze.erp_loc_ac101
+
+/*-------------------------------------------------------------
+    ERP Location Load Duration
+-------------------------------------------------------------*/
+Set @end_time =getdate();
+
+Print'>>Load Duration:'+Cast(Datediff(second,@start_time,@end_time) as Nvarchar)+'seconds';
+
+Print '>>---------------------------------';
+
+
+/*=============================================================
+    SECTION 6: LOAD ERP PRODUCT CATEGORY DATA
+    TARGET TABLE: silver.erp_px_cat_g1v2
+
+    PURPOSE:
+    --------
+    Load product category reference data from ERP source
+    into the Silver layer.
+
+    TRANSFORMATIONS:
+    ----------------
+    No transformations required.
+    Data is loaded as received from source.
+=============================================================*/
+
+-- Insert data into the silver.erp_px_cat_g1v2 from bronze.erp_px_cat_g1v2--
+
+Set @start_time =getdate();
+
+/*-------------------------------------------------------------
+    Remove Existing Data
+-------------------------------------------------------------*/
+Print'>> Truncating Table: silver.erp_px_cat_g1v2 ';
+
+Truncate Table silver.erp_px_cat_g1v2 
+
+/*-------------------------------------------------------------
+    Load Product Category Data
+-------------------------------------------------------------*/
+Print'>> Inserting data into: silver.erp_px_cat_g1v2 ';
+
+Insert into silver.erp_px_cat_g1v2
+(
+id,
+cat,
+subcat,
+maintenance
+)
+
+Select 
+id, 
+cat,
+subcat,
+maintenance
+
+From bronze.erp_px_cat_g1v2
+
+/*-------------------------------------------------------------
+    ERP Product Category Load Duration
+-------------------------------------------------------------*/
+Set @end_time =getdate();
+
+Print'>>Load Duration:'+Cast(Datediff(second,@start_time,@end_time) as Nvarchar)+'seconds';
+
+Print '>>---------------------------------';
+
+
+/*=============================================================
+    BATCH COMPLETION SUMMARY
+=============================================================*/
+
+Set @batch_end_time = getdate();
+
+Print '=========================================================';
+Print ' -Total Load Duration ;'+ Cast(Datediff(second,@batch_start_time,@batch_end_time) as Nvarchar)+'seconds';
+Print '=========================================================';
+
+
+/*=============================================================
+    ERROR HANDLING
+    Captures and displays SQL execution errors
+=============================================================*/
+
+End Try
+
+Begin Catch
+
+Print '==================================================';
+
+Print 'Error Message : ' + Error_Message();
+
+Print 'Error Number  : ' + Cast(Error_Number() as Nvarchar);
+
+Print 'Error State   : ' + Cast(Error_State() as Nvarchar);
+
+Print '==================================================';
+
+End Catch
+
+End
+
+
+--use the below command to use the stored procedure--
+exec silver.load_silver
