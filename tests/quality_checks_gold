@@ -1,1 +1,63 @@
+/*
+===============================================================================
+Gold Layer Quality Validation Checks
+===============================================================================
+Purpose:
+    Validate the integrity and consistency of the Gold layer views.
+    These checks ensure that dimension keys remain unique and that
+    all fact records maintain valid relationships with their
+    corresponding dimensions.
 
+Validation Rules:
+    - Customer surrogate keys must be unique.
+    - Product surrogate keys must be unique.
+    - Sales records must reference valid customer and product records.
+
+Expected Result:
+    All validation queries should return zero rows.
+===============================================================================
+*/
+
+-- =============================================================================
+-- Validation Check: Customer Dimension
+-- =============================================================================
+-- Verify that each customer is assigned a unique surrogate key.
+-- Expected Result: No records returned.
+
+SELECT
+    customer_key,
+    COUNT(*) AS duplicate_count
+FROM gold.dim_customers
+GROUP BY customer_key
+HAVING COUNT(*) > 1;
+
+
+-- =============================================================================
+-- Validation Check: Product Dimension
+-- =============================================================================
+-- Verify that each product is assigned a unique surrogate key.
+-- Expected Result: No records returned.
+
+SELECT
+    product_key,
+    COUNT(*) AS duplicate_count
+FROM gold.dim_products
+GROUP BY product_key
+HAVING COUNT(*) > 1;
+
+
+-- =============================================================================
+-- Validation Check: Fact Table Referential Integrity
+-- =============================================================================
+-- Verify that every sales transaction is linked to a valid
+-- customer and product dimension record.
+-- Expected Result: No records returned.
+
+SELECT *
+FROM gold.fact_sales f
+LEFT JOIN gold.dim_customers c
+    ON c.customer_key = f.customer_key
+LEFT JOIN gold.dim_products p
+    ON p.product_key = f.product_key
+WHERE c.customer_key IS NULL
+   OR p.product_key IS NULL;
