@@ -119,8 +119,19 @@ ORDER BY sls_sales, sls_quantity, sls_price;
 -- ====================================================================
 -- Checking 'silver.erp_cust_az12'
 -- ====================================================================
+-- identifying the keys that match the connecting key with the connecting key of tge CRM tables-
 -- Identify Out-of-Range Dates
 -- Expectation: Birthdates between 1924-01-01 and Today
+
+ Select 
+cid,
+bdate,
+gen
+From silver.erp_cust_az12
+Where cid like '%AW00011000%'
+Select * From silver.crm_cust_info
+---======================================================--
+--Checking date ranges--
 SELECT DISTINCT 
     bdate 
 FROM silver.erp_cust_az12
@@ -136,16 +147,27 @@ FROM silver.erp_cust_az12;
 -- Checking 'silver.erp_loc_ac101'
 -- ====================================================================
 -- Data Standardization & Consistency
-SELECT DISTINCT 
-    cntry 
-FROM silver.erp_loc_ac101
-ORDER BY cntry;
+
+-- checking the compatability of cid in erp table to with the connecting with table crm_cust_info--
+Select 
+cid, 
+cntry
+From silver.erp_loc_ac101
+
+--Data Standardization & Consistency-
+
+ Select distinct cntry
+From silver.erp_loc_ac101
+Order  by cntry
 
 -- ====================================================================
 -- Checking 'silver.erp_px_cat_g1v2'
 -- ====================================================================
 -- Check for Unwanted Spaces
 -- Expectation: No Results
+
+
+
 SELECT 
     * 
 FROM silver.erp_px_cat_g1v2
@@ -157,4 +179,3 @@ WHERE cat != TRIM(cat)
 SELECT DISTINCT 
     maintenance 
 FROM silver.erp_px_cat_g1v2;
-
