@@ -194,9 +194,10 @@ The project includes multiple validation checks to ensure data integrity and con
 ## 🚀 How to Run This Project
 
 ### 1. Create the Database
+Execute the script located in:
 
 ```text
-Execute the script init.database
+scripts/init.database.sql
 ```
 
 ### 2. Create Bronze Layer Objects
@@ -233,10 +234,10 @@ scripts/gold/
 
 ### 7. Validate Data Quality
 
-Run:
+Run the scipts lodated in:
 
 ```text
-quality_checks.sql
+tests
 ```
 
 ### 8. Query Gold Layer
