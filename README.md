@@ -295,8 +295,8 @@ tests
 
 Use Gold Layer views and tables for reporting and analytics.
 
-----
-### 🚀 Exploratory & Advanced Analytics
+
+### 9.  Exploratory & Advanced Analytics
 
 Execute scripts located in:
 
