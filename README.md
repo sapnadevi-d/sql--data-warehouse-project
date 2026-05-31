@@ -3,6 +3,22 @@
 > Developed as part of a guided SQL Data Warehouse course by Bara Saklani, providing hands-on experience in ETL development, data modeling, and analytical data warehousing.
 
 ---
+## 📌 Table of Contents
+
+- [📖 Project Overview](#-project-overview)
+- [🎯 Business Problem](#-business-problem)
+- [🏗️ Data Architecture](#️-data-architecture)
+- [📂 Data Sources](#-data-sources)
+- [🔄 ETL Pipeline](#-etl-pipeline)
+- [📊 Data Model](#-data-model)
+- [✅ Data Quality Checks](#-data-quality-checks)
+- [📊 Analytical Layer (EDA & Advanced Analytics)](#-analytical-layer-eda--advanced-analytics)
+- [🛠️ Technologies Used](#️-technologies-used)
+- [📊 SQL Techniques & Analytical Methods](#-sql-techniques--analytical-methods-used)
+- [🚀 How to Run This Project](#-how-to-run-this-project)
+- [🎯 Key Skills Demonstrated](#-key-skills-demonstrated)
+
+---
 
 
 
@@ -17,9 +33,9 @@ The project follows the Medallion Architecture (Bronze, Silver, and Gold layers)
 
 ## 🎯 Business Problem
 
-Business data is often distributed across multiple operational systems, making reporting and analysis difficult.
+Business data is often scattered across multiple operational systems, making reporting inconsistent and difficult.
 
-This project solves that challenge by centralizing CRM and ERP data into a unified SQL Server Data Warehouse that supports consistent reporting and business analytics.
+This project solves that problem by integrating CRM and ERP data into a centralized SQL Server Data Warehouse, enabling reliable analytics and decision-making.
 
 ---
 
@@ -175,7 +191,34 @@ The project includes multiple validation checks to ensure data integrity and con
 - Fact-to-Dimension Relationship Validation
 - Data Consistency Verification
 
+
+----
+
+## 📊 Analytical Layer (EDA & Advanced Analytics)
+
+After building the Gold Layer, exploratory and advanced SQL analysis was performed to generate meaningful business insights and validate the data model.
+
+This layer focuses on transforming structured warehouse data into actionable insights for reporting and decision-making.
+
+### 🎯 Key Analytical Areas
+- 📈 Sales trend analysis (monthly, yearly, seasonality patterns)
+- 👥 Customer behavior analysis (new vs returning customers, segmentation)
+- 🛍️ Product performance analysis (top/bottom-selling products)
+- 🌍 Geographic sales distribution
+- 💰 Revenue and KPI tracking (total sales, quantity, average order value)
+- ⏱️ Time-based analysis using date dimensions
+- 🧠 Advanced SQL techniques (window functions, ranking, aggregation)
+
+### 📌 Example Use Cases
+- Identifying top 10 customers by revenue
+- Finding best-performing product categories
+- Tracking monthly revenue growth trends
+- Analyzing sales contribution by region
+- Detecting underperforming products
+
+
 ---
+
 
 ## 🛠️ Technologies Used
 
@@ -189,7 +232,15 @@ The project includes multiple validation checks to ensure data integrity and con
 | Data Modeling | Star Schema |
 | ETL Development | SQL-Based ETL Pipelines |
 
+## 📊 SQL Techniques & Analytical Methods Used
+
+- Aggregate functions (`SUM`, `COUNT`, `AVG`)
+- Window functions (`RANK`, `DENSE_RANK`, `LAG`)
+- Common Table Expressions (CTEs)
+- Joins across fact and dimension tables
+- Time intelligence using Date dimension
 ---
+
 
 ## 🚀 How to Run This Project
 
@@ -234,7 +285,7 @@ scripts/gold/
 
 ### 7. Validate Data Quality
 
-Run the scipts lodated in:
+Run the scripts located in:
 
 ```text
 tests
@@ -243,6 +294,15 @@ tests
 ### 8. Query Gold Layer
 
 Use Gold Layer views and tables for reporting and analytics.
+
+----
+### 🚀 Exploratory & Advanced Analytics
+
+Execute scripts located in:
+
+```text
+scripts/eda_and_advanced_data_analytics/
+```
 
 
 
@@ -257,6 +317,7 @@ Use Gold Layer views and tables for reporting and analytics.
 - Fact and Dimension table design
 - Data quality and integrity validation
 - Analytical data warehouse development
+- Exploratory and advanced SQL analytics using window functions and CTEs
 
 
 
